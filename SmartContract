@@ -46,7 +46,7 @@ contract CropInsurance {
     event ClaimSubmitted(address indexed policyHolder, uint256 policyId, uint256 amount);
     event ClaimPaidOut(address indexed policyHolder, uint256 policyId, uint256 amount);
 
-    constructor(address _weatherOracleAddress, uint256 _premium, uint256 _coverageAmount, uint256 _startDate, uint256 _expiryDate, string memory _cropType, string memory _farmingPeriod, string memory _farmLocation, uint256 _payoutPercentage) {
+    constructor(address _weatherOracleAddress, uint256 _premium, uint256 _coverageAmount, uint256 _startDate, uint256 _expiryDate, string memory _cropType, string memory _farmingPeriod, string memory _farmLocation, uint256 _payoutPercentage) payable {
         owner = msg.sender;
         weatherOracle = AggregatorV3Interface(_weatherOracleAddress);
         premium = _premium;
