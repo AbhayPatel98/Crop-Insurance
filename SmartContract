@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
+contract CropInsurance {
+    address public owner;
+    AggregatorV3Interface internal weatherOracle;
+    uint256 public premium;
+    uint256 public coverageAmount;
+    uint256 public startDate;
+    uint256 public expiryDate;
+    string public cropType;
+    string public farmingPeriod;
+    string public farmLocation;
+    uint256 public payoutPercentage;
+
+    struct Policy {
+        uint256 id;
+        uint256 premiumPaid;
+        uint256 coverageAmount;
+        bool paidOut;
+        bool active;
+        uint256 startDate;
+        uint256 expiryDate;
+        string cropType;
+        string farmingPeriod;
+        string farmLocation;
+    }
+     struct Farm {
+        string farmName;
+        string geoCoordinates;
+        string cropType;
+        string cropStatus;
+        string farmingPeriod;
+        bool isInsured;
+        uint paymentPercentage;
+        bool isPaid;
+    }
+
+    mapping(address => Farm) public farms;
+    mapping(address => Policy) public policies;
+
+    event PolicyCreated(address indexed policyHolder, uint256 policyId);
+    event PolicyCancelled(address indexed policyHolder, uint256 policyId);
+    event ClaimSubmitted(address indexed policyHolder, uint256 policyId, uint256 amount);
+    event ClaimPaidOut(address indexed policyHolder, uint256 policyId, uint256 amount);
+
+    constructor(address _weatherOracleAddress, uint256 _premium, uint256 _coverageAmount, uint256 _startDate, uint256 _expiryDate, string memory _cropType, string memory _farmingPeriod, string memory _farmLocation, uint256 _payoutPercentage) {
+        owner = msg.sender;
+        weatherOracle = AggregatorV3Interface(_weatherOracleAddress);
+        premium = _premium;
+        coverageAmount = _coverageAmount;
+        startDate = _startDate;
+        expiryDate = _expiryDate;
+        cropType = _cropType;
+        farmingPeriod = _farmingPeriod;
+        farmLocation = _farmLocation;
+        payoutPercentage = _payoutPercentage;
+    }
+
+    function createPolicy() external payable {
+        require(!policies[msg.sender].active, "You already have an active policy");
+        require(msg.value == premium, "Premium amount incorrect");
+
+        Policy memory policy = Policy({
+            id: block.timestamp,
+            premiumPaid: msg.value,
+            coverageAmount: coverageAmount,
+            paidOut: false,
+            active: true,
+            startDate: startDate,
+            expiryDate: expiryDate,
+            cropType: cropType,
+            farmingPeriod: farmingPeriod,
+            farmLocation: farmLocation
+        });
+
+        policies[msg.sender] = policy;
+
+        emit PolicyCreated(msg.sender, policy.id);
+    }
+
+    function registerFarm(string memory _farmName, string memory _geoCoordinates, string memory _cropType, string memory _cropStatus, string memory _farmingPeriod) public {
+        require(msg.sender != owner, "Only farmers can register farms");
+        farms[msg.sender] = Farm({
+            farmName: _farmName,
+            geoCoordinates: _geoCoordinates,
+            cropType: _cropType,
+            cropStatus: _cropStatus,
+            farmingPeriod: _farmingPeriod,
+            isInsured: false,
+            paymentPercentage: 0,
+            isPaid: false
+        });
+    }
+
+    function cancelPolicy() external {
+        require(policies[msg.sender].active, "No active policy found");
+
+        Policy storage policy = policies[msg.sender];
+
+        policy.active = false;
+
+        payable(msg.sender).transfer(policy.premiumPaid);
+
+        emit PolicyCancelled(msg.sender, policy.id);
+    }
+
+    function submitClaim() external {
+        require(policies[msg.sender].active, "No active policy found");
+
+        Policy storage policy = policies[msg.sender];
+
+        require(!policy.paidOut, "Claim already paid out");
+        require(block.timestamp >= policy.startDate && block.timestamp <= policy.expiryDate, "Claim cannot be submitted outside policy dates");
+
+        if (block.timestamp > 15 && keccak256(bytes(policy.cropType)) == keccak256(bytes("rice")) && keccak256(bytes(policy.farmingPeriod)) == keccak256(bytes("seed sowing")) && keccak256(bytes(policy.farmLocation)) == keccak256(bytes(farmLocation))) {
+       // If drought conditions meet the policy's requirements, pay out 100% of coverage amount
+        policy.paidOut = true;
+        payable(msg.sender).transfer(policy.coverageAmount);
+        emit ClaimPaidOut(msg.sender, policy.id, policy.coverageAmount);
+           } else if (block.timestamp < 7) {  
+           // If drought conditions do not meet the policy's requirements, pay out 25% of coverage amount 
+        policy.paidOut = true;
+        uint256 payoutAmount = policy.coverageAmount * payoutPercentage / 100;
+        payable(msg.sender).transfer(payoutAmount);
+        emit ClaimPaidOut(msg.sender, policy.id, payoutAmount);
+        emit ClaimSubmitted(msg.sender, policy.id, policy.coverageAmount);
+}
+
+}
+
+    function getPaymentPercentage(address _farmAddress) public view returns (uint) {
+        Farm memory farm = farms[_farmAddress];
+        uint droughtDays = getDroughtDays();
+        uint paymentPercentage = 0;
+
+        if (droughtDays >= 15 days && keccak256(bytes(farm.cropType)) == keccak256(bytes("rice")) && keccak256(bytes(farm.farmingPeriod)) == keccak256(bytes("seed sowing")) ){
+            paymentPercentage = 100;
+        } else if (droughtDays < 7) {
+            paymentPercentage = 25;
+        }
+
+        return paymentPercentage;
+    }
+
+    function getDroughtDays() public view returns(uint256) {
+
+        uint startTime= block.timestamp;
+        uint endTime = startTime + 1074163;
+
+
+        return endTime;
+        
+
+    }
+}
